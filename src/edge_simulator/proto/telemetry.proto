@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package sie;
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Supplier Intelligence Platform — Telemetry gRPC Service
+//
+// Used by:
+//   - Agent 1 (Edge Simulator) as CLIENT
+//   - Agent 2 (Ingestion API) as SERVER
+//
+// After modifying this file, run: make proto
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+service TelemetryService {
+  // Stream telemetry data from edge devices to the ingestion API
+  rpc StreamTelemetry (stream TelemetryEvent) returns (TelemetryAck);
+
+  // Stream inspection images from edge devices to the ingestion API
+  rpc StreamInspectionImage (stream InspectionImage) returns (InspectionAck);
+}
+
+// ──── Messages ────
+
+message TelemetryEvent {
+  string supplier_code = 1;        // e.g., "PREC_MOTORS"
+  string equipment_code = 2;       // e.g., "PREC_SMT_01"
+  string product_line_code = 3;    // e.g., "PREC_LINE_A"
+  int64 timestamp_ms = 4;          // Unix timestamp in milliseconds
+  float cycle_time_seconds = 5;    // Production cycle time
+  int32 units_produced = 6;        // Units produced this cycle
+  int32 units_passed = 7;          // Units that passed QA
+  float temperature_c = 8;         // Equipment temperature (Celsius)
+  float pressure_psi = 9;          // Operating pressure (PSI)
+  float vibration_mm_s = 10;       // Vibration level (mm/s)
+  float power_consumption_kw = 11; // Power consumption (kW)
+  map<string, string> process_params = 12; // Additional key-value params
+}
+
+message InspectionImage {
+  string supplier_code = 1;
+  string equipment_code = 2;
+  int64 timestamp_ms = 3;
+  bytes image_data = 4;            // JPEG/PNG image bytes
+  string image_format = 5;         // "jpeg" or "png"
+  string inspection_type = 6;      // "visual", "xray", "thermal"
+}
+
+message TelemetryAck {
+  bool success = 1;
+  string message = 2;
+}
+
+message InspectionAck {
+  bool success = 1;
+  string message = 2;
+}

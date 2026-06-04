@@ -1,0 +1,73 @@
+# ──── Python ────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# ──── Virtual envs ────
+.venv/
+venv/
+env/
+
+# ──── IDE ────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ──── Environment ────
+.env
+.env.local
+.env.*.local
+
+# ──── Docker volumes ────
+docker-volumes/
+postgres-data/
+kafka-data/
+airflow-logs/
+
+# ──── Proto compiled stubs ────
+*_pb2.py
+*_pb2_grpc.py
+*_pb2.pyi
+*_pb2_grpc.pyi
+
+# ──── ML models ────
+src/cv_module/models/*.pt
+src/cv_module/models/*.onnx
+src/cv_module/data/datasets/
+
+# ──── Coverage ────
+.coverage
+htmlcov/
+coverage.xml
+
+# ──── Mypy ────
+.mypy_cache/
+
+# ──── Ruff ────
+.ruff_cache/
+
+# ──── Pytest ────
+.pytest_cache/
+
+# ──── Airflow ────
+airflow-logs/
+airflow-plugins/
+
+# ──── Great Expectations ────
+great_expectations/uncommitted/
+
+# ──── OS ────
+.DS_Store
+Thumbs.db
+
+# ──── Misc ────
+*.log
+*.bak

@@ -1,0 +1,7 @@
+names:
+  0: scratch
+  1: discoloration
+  2: misalignment
+path: /mnt/1TB_Drive/Data/MyFiles/Projects/supplier-intelligence-platform/data/synthetic
+train: images/train
+val: images/val

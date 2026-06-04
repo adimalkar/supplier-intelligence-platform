@@ -1,0 +1,139 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "supplier-intelligence-platform"
+version = "0.1.0"
+description = "Real-Time Supplier Intelligence & Quality Monitoring Platform"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Aditya Malkar", email = "amalkar@stevens.edu"},
+]
+
+dependencies = [
+    # Core
+    "pydantic>=2.5,<3.0",
+    "pydantic-settings>=2.1,<3.0",
+    "python-dotenv>=1.0,<2.0",
+    "sqlalchemy>=2.0,<3.0",
+    "psycopg2-binary>=2.9,<3.0",
+    "alembic>=1.13,<2.0",
+]
+
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.109,<1.0",
+    "uvicorn[standard]>=0.27,<1.0",
+    "grpcio>=1.60,<2.0",
+    "grpcio-tools>=1.60,<2.0",
+    "confluent-kafka>=2.3,<3.0",
+    "python-multipart>=0.0.6",
+]
+pipeline = [
+    "apache-airflow>=2.8,<3.0",
+    "great-expectations>=0.18,<1.0",
+    "confluent-kafka>=2.3,<3.0",
+    "pandas>=2.1,<3.0",
+    "numpy>=1.26,<2.0",
+    "scipy>=1.12,<2.0",
+]
+cv = [
+    "ultralytics>=8.1,<9.0",
+    "opencv-python-headless>=4.9,<5.0",
+    "torch>=2.1,<3.0",
+    "torchvision>=0.16,<1.0",
+    "Pillow>=10.0,<11.0",
+]
+ai = [
+    "langchain>=0.1,<1.0",
+    "langchain-openai>=0.0.5",
+    "langchain-community>=0.0.10",
+    "openai>=1.10,<2.0",
+]
+dashboard = [
+    "streamlit>=1.30,<2.0",
+    "plotly>=5.18,<6.0",
+    "pandas>=2.1,<3.0",
+]
+simulator = [
+    "grpcio>=1.60,<2.0",
+    "grpcio-tools>=1.60,<2.0",
+    "numpy>=1.26,<2.0",
+    "opencv-python-headless>=4.9,<5.0",
+    "Pillow>=10.0,<11.0",
+]
+dev = [
+    "pytest>=7.4,<9.0",
+    "pytest-asyncio>=0.23,<1.0",
+    "pytest-cov>=4.1,<6.0",
+    "httpx>=0.26,<1.0",
+    "ruff>=0.2,<1.0",
+    "mypy>=1.8,<2.0",
+    "pre-commit>=3.6,<4.0",
+]
+all = [
+    "supplier-intelligence-platform[api,pipeline,cv,ai,dashboard,simulator,dev]",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+# ──────────────────────────────────────────────
+# Ruff (linter + formatter)
+# ──────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "W",    # pycodestyle warnings
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "A",    # flake8-builtins
+    "SIM",  # flake8-simplify
+    "TCH",  # flake8-type-checking
+]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+# ──────────────────────────────────────────────
+# Mypy (type checking)
+# ──────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "src.pipeline.dags.*"
+disallow_untyped_defs = false
+
+# ──────────────────────────────────────────────
+# Pytest
+# ──────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+asyncio_mode = "auto"
+markers = [
+    "unit: Unit tests (no external dependencies)",
+    "integration: Integration tests (require Docker services)",
+    "e2e: End-to-end tests (require full stack)",
+]
+addopts = "-v --tb=short"

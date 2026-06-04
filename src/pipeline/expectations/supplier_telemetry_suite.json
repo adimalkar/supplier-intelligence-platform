@@ -1,0 +1,22 @@
+{
+  "data_asset_type": "Dataset",
+  "expectation_suite_name": "supplier_telemetry_suite",
+  "expectations": [
+    {
+      "expectation_type": "expect_column_to_exist",
+      "kwargs": { "column": "supplier_code" }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": { "column": "supplier_code" }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": { "column": "yield_rate", "min_value": 0.0, "max_value": 1.0 }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": { "column": "units_produced", "min_value": 0 }
+    }
+  ]
+}

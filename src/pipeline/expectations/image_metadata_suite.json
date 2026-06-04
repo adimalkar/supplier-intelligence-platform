@@ -1,0 +1,18 @@
+{
+  "data_asset_type": "Dataset",
+  "expectation_suite_name": "image_metadata_suite",
+  "expectations": [
+    {
+      "expectation_type": "expect_column_to_exist",
+      "kwargs": { "column": "image_id" }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": { "column": "image_id" }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": { "column": "image_format", "value_set": ["jpeg", "png", "jpg"] }
+    }
+  ]
+}

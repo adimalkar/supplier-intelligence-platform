@@ -1,0 +1,224 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Supplier Intelligence Platform — Full Stack Docker Compose
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Usage:
+#   docker compose up -d              # Start everything
+#   docker compose up -d postgres     # Start DB only
+#   docker compose up -d kafka        # Start Kafka only
+#   docker compose down               # Stop everything
+#   docker compose down -v            # Stop + remove volumes
+#
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+services:
+
+  # ──── PostgreSQL + TimescaleDB ────
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    container_name: sie-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-sie_admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-sie_secure_password_change_me}
+      POSTGRES_DB: ${DB_NAME:-sie_analytics}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d  # Init scripts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-sie_admin} -d ${DB_NAME:-sie_analytics}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sie-network
+    restart: unless-stopped
+
+  # ──── Apache Kafka (KRaft — no Zookeeper) ────
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: sie-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 3
+      CLUSTER_ID: "SIEClusterId12345678"
+    ports:
+      - "29092:29092"  # Host access
+      - "9092:9092"    # Internal access
+    volumes:
+      - kafka-data:/tmp/kraft-combined-logs
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - sie-network
+    restart: unless-stopped
+
+  # ──── Kafka Topic Init ────
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: sie-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      "
+      echo 'Creating Kafka topics...'
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic supplier.telemetry.raw --partitions 5 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic supplier.images.raw --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic supplier.telemetry.transformed --partitions 5 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic supplier.alerts --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic supplier.schema-changes --partitions 1 --replication-factor 1
+      echo 'Topics created:'
+      kafka-topics --bootstrap-server kafka:9092 --list
+      "
+    networks:
+      - sie-network
+
+  # ──── Kafka UI (for debugging/monitoring) ────
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: sie-kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: SIE-Local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    ports:
+      - "8080:8080"
+    networks:
+      - sie-network
+    restart: unless-stopped
+
+  # ──── Airflow (Postgres metadata DB) ────
+  airflow-metadata-db:
+    image: postgres:16-alpine
+    container_name: sie-airflow-db
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sie-network
+    restart: unless-stopped
+
+  airflow-init:
+    image: apache/airflow:2.8.1-python3.11
+    container_name: sie-airflow-init
+    depends_on:
+      airflow-metadata-db:
+        condition: service_healthy
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-metadata-db:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: "81HqDtbqAywKSOumSha3BhWNOdQ26slT6K0YaZeZyPs="
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: admin
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        airflow db migrate
+        airflow users create --role Admin --username admin --password admin --email admin@sie.local --firstname Admin --lastname User || true
+    networks:
+      - sie-network
+
+  airflow-webserver:
+    image: apache/airflow:2.8.1-python3.11
+    container_name: sie-airflow-webserver
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-metadata-db:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: "81HqDtbqAywKSOumSha3BhWNOdQ26slT6K0YaZeZyPs="
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__WEB_SERVER_PORT: 8081
+      # SIE environment variables (for DAGs to access)
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-sie_analytics}
+      DB_USER: ${DB_USER:-sie_admin}
+      DB_PASSWORD: ${DB_PASSWORD:-sie_secure_password_change_me}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./src/pipeline/dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src  # Mount src so DAGs can import common modules
+      - airflow-logs:/opt/airflow/logs
+    command: webserver
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - sie-network
+    restart: unless-stopped
+
+  airflow-scheduler:
+    image: apache/airflow:2.8.1-python3.11
+    container_name: sie-airflow-scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-metadata-db:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: "81HqDtbqAywKSOumSha3BhWNOdQ26slT6K0YaZeZyPs="
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-sie_analytics}
+      DB_USER: ${DB_USER:-sie_admin}
+      DB_PASSWORD: ${DB_PASSWORD:-sie_secure_password_change_me}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    volumes:
+      - ./src/pipeline/dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
+      - airflow-logs:/opt/airflow/logs
+    command: scheduler
+    networks:
+      - sie-network
+    restart: unless-stopped
+
+# ──── Volumes ────
+volumes:
+  postgres-data:
+  kafka-data:
+  airflow-db-data:
+  airflow-logs:
+
+# ──── Networks ────
+networks:
+  sie-network:
+    driver: bridge
+    name: sie-network
