@@ -22,6 +22,12 @@ This platform enables real-time production performance monitoring across global 
 - [Edge Deployment Guide](docs/edge-deployment-guide.md)
 - [API Reference](docs/api-reference.md)
 
+## Prerequisites
+
+- Docker and Docker Compose
+- Python 3.10+
+- GNU Make
+
 ## Quick Start
 
 1. Install dependencies:
